@@ -19,6 +19,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -34,6 +36,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,7 +47,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint8_t adcInput[3];   // the 3 bytes we send to the ADC
+uint8_t adcOutput[3];  // the 3 bytes the ADC sends back
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,6 +68,7 @@ void SystemClock_Config(void);
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -87,9 +92,17 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
-  /* USER CODE END 2 */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1); //turns PWM signal on, uses the pointer to access tim1 handle, tim_channel_1 maps to pa8 pin
+
+
+  adcInput[0] = 0x01; // start bit
+  adcInput[1] = 0x80; // single-ended + channel 0, shifted into the high nibble (0x08 << 4)
+  adcInput[2] = 0x00; // filler byte so the ADC can clock its answer back
+
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -98,6 +111,19 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); //pulls CS Wire Low, allows communication?
+
+	  HAL_SPI_TransmitReceive(&hspi1, adcInput, adcOutput, 3, HAL_MAX_DELAY);//&hspi1 is location of SPI connection, adcInput is what to sent and adcOutput stores the output, 3 numbers are sent
+
+	  HAL_GPIO_WritePin (GPIOB, GPIO_PIN_8, GPIO_PIN_SET); //pulls cs wire high, closes communication
+
+	  uint16_t digiValue = ((adcOutput[1] & 0x03) << 8| adcOutput[2]); //only last two bits of second byte kept, and glues the rest of the byte with the third byte (ten bits long)
+
+	  uint32_t pulseWidth = 3200 + ((uint32_t)digiValue * 3200) / 1023; //cast to 32-bit first so the multiply doesn't overflow
+
+	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulseWidth);
+
+	  HAL_Delay (10);
   }
   /* USER CODE END 3 */
 }
@@ -122,6 +148,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -160,8 +187,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
@@ -177,5 +203,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
