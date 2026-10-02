@@ -47,8 +47,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint8_t adcInput[3];   // the 3 bytes we send to the ADC
-uint8_t adcOutput[3];  // the 3 bytes the ADC sends back
+#define adcBytes 3 //number of bytes ADC receives and transfers
+uint8_t adcInput[adcBytes];
+uint8_t adcOutput[adcBytes];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -102,7 +103,8 @@ int main(void)
   adcInput[0] = 0x01; // start bit
   adcInput[1] = 0x80; // single-ended + channel 0, shifted into the high nibble (0x08 << 4)
   adcInput[2] = 0x00; // filler byte so the ADC can clock its answer back
-
+  int secondByteLeftShift = 8; //the bits in the second byte from the adc output need to be shifted 8 to the right, and added to the third byte sent
+  uint32_t minWidth = 3200, range = 3200;
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -113,13 +115,21 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); //pulls CS Wire Low, allows communication?
 
-	  HAL_SPI_TransmitReceive(&hspi1, adcInput, adcOutput, 3, HAL_MAX_DELAY);//&hspi1 is location of SPI connection, adcInput is what to sent and adcOutput stores the output, 3 numbers are sent
+	  HAL_StatusTypeDef spiStatus = HAL_SPI_TransmitReceive(&hspi1, adcInput, adcOutput, adcBytes, HAL_MAX_DELAY);
+
+
+	  if (spiStatus == HAL_OK){
+		  printf("SPI transaction has succeeded.");
+	  } else {
+		  printf ("SPI transaction has failed.");
+	  }
+
 
 	  HAL_GPIO_WritePin (GPIOB, GPIO_PIN_8, GPIO_PIN_SET); //pulls cs wire high, closes communication
 
-	  uint16_t digiValue = ((adcOutput[1] & 0x03) << 8| adcOutput[2]); //only last two bits of second byte kept, and glues the rest of the byte with the third byte (ten bits long)
+	  uint16_t digiValue = ((adcOutput[1] & 0x03) << secondByteRightShift| adcOutput[2]); //only last two bits of second byte kept, and glues the rest of the byte with the third byte (ten bits long)
 
-	  uint32_t pulseWidth = 3200 + ((uint32_t)digiValue * 3200) / 1023; //cast to 32-bit first so the multiply doesn't overflow
+	  uint32_t pulseWidth = minWidth + ((uint32_t)digiValue * range) / 1023; //cast to 32-bit first so the multiply doesn't overflow
 
 	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulseWidth);
 
@@ -203,3 +213,5 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
+
