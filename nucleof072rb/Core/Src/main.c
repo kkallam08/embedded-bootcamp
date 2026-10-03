@@ -47,9 +47,6 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-#define adcBytes 3 //number of bytes ADC receives and transfers
-uint8_t adcInput[adcBytes];
-uint8_t adcOutput[adcBytes];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,6 +94,11 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
+  const uint8_t ADC_BYTES =  3; //number of bytes ADC receives and transfers
+  uint8_t adcInput[ADC_BYTES];
+  uint8_t adcOutput[ADC_BYTES];
+  uint32_t adcMax = 1023; //max value from adc's 10 bit value
+
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1); //turns PWM signal on, uses the pointer to access tim1 handle, tim_channel_1 maps to pa8 pin
 
 
@@ -115,7 +117,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); //pulls CS Wire Low, allows communication?
 
-	  HAL_StatusTypeDef spiStatus = HAL_SPI_TransmitReceive(&hspi1, adcInput, adcOutput, adcBytes, HAL_MAX_DELAY);
+	  HAL_StatusTypeDef spiStatus = HAL_SPI_TransmitReceive(&hspi1, adcInput, adcOutput, ADC_BYTES, HAL_MAX_DELAY);
 
 
 	  if (spiStatus == HAL_OK){
@@ -129,7 +131,7 @@ int main(void)
 
 	  uint16_t digiValue = ((adcOutput[1] & 0x03) << secondByteRightShift| adcOutput[2]); //only last two bits of second byte kept, and glues the rest of the byte with the third byte (ten bits long)
 
-	  uint32_t pulseWidth = minWidth + ((uint32_t)digiValue * range) / 1023; //cast to 32-bit first so the multiply doesn't overflow
+	  uint32_t pulseWidth = minWidth + ((uint32_t)digiValue * range) / adcMax; //cast to 32-bit first so the multiply doesn't overflow
 
 	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulseWidth);
 
